@@ -2,7 +2,7 @@ use rltk::{VirtualKeyCode, Rltk, Point};
 use specs::prelude::*;
 use std::cmp::{max, min};
 use super::{Position, Player, Viewshed, State, Map, RunState, CombatStats, WantsToMelee, Item,
-    gamelog::GameLog, WantsToPickupItem};
+            gamelog::GameLog, WantsToPickupItem};
 
 pub fn try_move_player(delta_x: i32, delta_y: i32, ecs: &mut World) {
     let mut positions = ecs.write_storage::<Position>();
@@ -12,6 +12,7 @@ pub fn try_move_player(delta_x: i32, delta_y: i32, ecs: &mut World) {
     let combat_stats = ecs.read_storage::<CombatStats>();
     let map = ecs.fetch::<Map>();
     let mut wants_to_melee = ecs.write_storage::<WantsToMelee>();
+
 
     for (entity, _player, pos, viewshed) in (&entities, &players, &mut positions, &mut viewsheds).join() {
         if pos.x + delta_x < 1 || pos.x + delta_x > map.width-1 || pos.y + delta_y < 1 || pos.y + delta_y > map.height-1 { return; }
@@ -99,6 +100,11 @@ pub fn player_input(gamestate: &mut State, context: &mut Rltk) -> RunState {
             VirtualKeyCode::P => get_item(&mut gamestate.ecs),
             VirtualKeyCode::I => return RunState::ShowInventory,
             VirtualKeyCode::D => return RunState::ShowDropItem,
+
+            //TODO fix impossible y axis with targeting upgrade to prevent play from hitting themselves
+            //Waiting
+            VirtualKeyCode::Key5 |
+            VirtualKeyCode::Numpad5 => try_move_player(0, 999, &mut gamestate.ecs),
 
             _ => { return RunState::AwaitingInput }
         },

@@ -1,6 +1,7 @@
 use rltk::{ RGB, Rltk, Point, VirtualKeyCode };
 use specs::prelude::*;
-use super::{CombatStats, Player, gamelog::GameLog, Map, Name, Position, State, InBackpack};
+use super::{CombatStats, Player, gamelog::GameLog, Map, Name, Position, State, InBackpack,
+            Viewshed};
 
 pub fn draw_ui(ecs: &World, context : &mut Rltk) {
     context.draw_box(0, 43, 79, 6, RGB::named(rltk::WHITE), RGB::named(rltk::BLACK));
@@ -168,4 +169,46 @@ pub fn drop_item_menu(gamestate : &mut State, context : &mut Rltk) -> (ItemMenuR
             }
         }
     }
+}
+
+pub fn ranged_target(gamestate : &mut State, context : &mut Rltk, range : i32) -> (ItemMenuResult, Option<Point>) {
+    let player_entity = gamestate.ecs.fetch::<Entity>();
+    let player_pos = gamestate.ecs.fetch::<Point>();
+    let viewsheds = gamestate.ecs.read_storage::<Viewshed>();
+
+    context.print_color(5, 0, RGB::named(rltk::YELLOW), RGB::named(rltk::BLACK), "Select Target:");
+
+    // Highlight available target cells
+    let mut available_cells = Vec::new();
+    let visible = viewsheds.get(*player_entity);
+    if let Some(visible) = visible {
+        // We have a viewshed
+        for index in visible.visible_tiles.iter() {
+            let distance = rltk::DistanceAlg::Pythagoras.distance2d(*player_pos, *index);
+            if distance <= range as f32 {
+                context.set_bg(index.x, index.y, RGB::named(rltk::BLUE));
+                available_cells.push(index);
+            }
+        }
+    } else {
+        return (ItemMenuResult::Cancel, None);
+    }
+
+    // Draw mouse cursor
+    let mouse_pos = context.mouse_pos();
+    let mut valid_target = false;
+    for index in available_cells.iter() { if index.x == mouse_pos.0 && index.y == mouse_pos.1 { valid_target = true; } }
+    if valid_target {
+        context.set_bg(mouse_pos.0, mouse_pos.1, RGB::named(rltk::CYAN));
+        if context.left_click {
+            return (ItemMenuResult::Selected, Some(Point::new(mouse_pos.0, mouse_pos.1)));
+        }
+    } else {
+        context.set_bg(mouse_pos.0, mouse_pos.1, RGB::named(rltk::RED));
+        if context.left_click {
+            return (ItemMenuResult::Cancel, None);
+        }
+    }
+
+    (ItemMenuResult::NoResponse, None)
 }

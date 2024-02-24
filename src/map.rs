@@ -76,7 +76,7 @@ impl Map {
 
     /// Makes a new map using the algorithm from http://rogueliketutorials.com/tutorials/tcod/part-3/
     /// This gives a handful of random rooms and corridors joining them together.
-    pub fn new_map_rooms_and_corridors() -> Map {
+    pub fn random_room_dungeon() -> Map {
         let mut map = Map{
             tiles : vec![TileType::Wall; MAPCOUNT],
             rooms : Vec::new(),
@@ -100,11 +100,11 @@ impl Map {
             let x = rng.roll_dice(1, map.width - w - 1) - 1;
             let y = rng.roll_dice(1, map.height - h - 1) - 1;
             let new_room = Rect::new(x, y, w, h);
-            let mut ok = true;
+            let mut no_overlap = true;
             for other_room in map.rooms.iter() {
-                if new_room.intersect(other_room) { ok = false }
+                if new_room.intersect(other_room) { no_overlap = false }
             }
-            if ok {
+            if no_overlap {
                 map.apply_room_to_map(&new_room);
 
                 if !map.rooms.is_empty() {
@@ -178,19 +178,19 @@ pub fn draw_map(ecs: &World, context : &mut Rltk) {
 
         if map.revealed_tiles[index] {
             let glyph;
-            let mut fg;
+            let mut foreground;
             match tile {
                 TileType::Floor => {
                     glyph = rltk::to_cp437('.');
-                    fg = RGB::from_f32(0.0, 0.5, 0.5);
+                    foreground = RGB::from_f32(0.0, 0.5, 0.5);
                 }
                 TileType::Wall => {
                     glyph = rltk::to_cp437('#');
-                    fg = RGB::from_f32(0., 1.0, 0.);
+                    foreground = RGB::from_f32(0., 1.0, 0.);
                 }
             }
-            if !map.visible_tiles[index] { fg = fg.to_greyscale() }
-            context.set(x, y, fg, RGB::from_f32(0., 0., 0.), glyph);
+            if !map.visible_tiles[index] { foreground = foreground.to_greyscale() }
+            context.set(x, y, foreground, RGB::from_f32(0., 0., 0.), glyph);
         }
 
         // Move the coordinates
