@@ -1,91 +1,106 @@
 use rltk::{VirtualKeyCode, Rltk, Point};
 use specs::prelude::*;
-use std::cmp::{min, max};
-use super::{Position, Player, Viewshed, TileType, State, Map, RunState, CombatStats, WantsToMelee};
+use std::cmp::{max, min};
+use super::{Position, Player, Viewshed, State, Map, RunState, CombatStats, WantsToMelee, Item,
+    gamelog::GameLog, WantsToPickupItem};
 
-//Function to move the player
-pub fn try_move_player (delta_x: i32, delta_y:i32, ecs: &mut World) {
+pub fn try_move_player(delta_x: i32, delta_y: i32, ecs: &mut World) {
     let mut positions = ecs.write_storage::<Position>();
-    let mut players = ecs.write_storage::<Player>();
+    let players = ecs.read_storage::<Player>();
     let mut viewsheds = ecs.write_storage::<Viewshed>();
     let entities = ecs.entities();
-    let combat_stats = ecs.read_storage::<CombatStats>;
+    let combat_stats = ecs.read_storage::<CombatStats>();
     let map = ecs.fetch::<Map>();
     let mut wants_to_melee = ecs.write_storage::<WantsToMelee>();
 
-    for (entity, _player, position, viewshed) in (&entities, &player, &mut position, &mut viewshed),join(){
-        if position.x + delta_x < 1 || position.x + delta_x > map.width-1 || position.y + delta_y < 1 || position.y + delta_y > map.height-1 { return; }
-        let destination_index = map.xy_index(position.x + delta_x, position.y + delta_y);
-
-        for potential_target in maps.tile_content[destination_index].iter(){
-
-        }
-
-
-// Min Max to prevent them from walking off screen
-    for (entity, _players, position, viewshed) in (&entities, &players, &mut positions, &mut viewsheds).join() {
-        if position.x + delta_x < 1 || position.x + delta_x > map.width -1 || pos.y + delta_y < 1 || pos.y + delta_y > map.height - 1 { return; }
-        let destination_index = map.xy_index(position.x + delta_x, position.y + delta_y);
+    for (entity, _player, pos, viewshed) in (&entities, &players, &mut positions, &mut viewsheds).join() {
+        if pos.x + delta_x < 1 || pos.x + delta_x > map.width-1 || pos.y + delta_y < 1 || pos.y + delta_y > map.height-1 { return; }
+        let destination_index = map.xy_index(pos.x + delta_x, pos.y + delta_y);
 
         for potential_target in map.tile_content[destination_index].iter() {
             let target = combat_stats.get(*potential_target);
             if let Some(_target) = target {
-                wants_to_melee.insert(entity, WantsToMelee{ target : *poetential_target }).expect("Add Target failed");
-                }
+                wants_to_melee.insert(entity, WantsToMelee{ target: *potential_target }).expect("Add target failed");
+                return;
             }
         }
 
         if !map.blocked[destination_index] {
-            position.x = min(79, max(0, position.x + delta_x));
-            position.y = min(49, max(0, position.y + delta_y));
+            pos.x = min(79 , max(0, pos.x + delta_x));
+            pos.y = min(49, max(0, pos.y + delta_y));
 
             viewshed.dirty = true;
-            let mut playerposition = ecs.write_resource::<Point>();
-            playerposition.x = position.x;
-            playerposition.y = position.y;
+            let mut ppos = ecs.write_resource::<Point>();
+            ppos.x = pos.x;
+            ppos.y = pos.y;
+        }
+    }
+}
 
+fn get_item(ecs: &mut World) {
+    let player_pos = ecs.fetch::<Point>();
+    let player_entity = ecs.fetch::<Entity>();
+    let entities = ecs.entities();
+    let items = ecs.read_storage::<Item>();
+    let positions = ecs.read_storage::<Position>();
+    let mut gamelog = ecs.fetch_mut::<GameLog>();
+
+    let mut target_item : Option<Entity> = None;
+    for (item_entity, _item, position) in (&entities, &items, &positions).join() {
+        if position.x == player_pos.x && position.y == player_pos.y {
+            target_item = Some(item_entity);
+        }
+    }
+
+    match target_item {
+        None => gamelog.entries.push("There is nothing here to pick up.".to_string()),
+        Some(item) => {
+            let mut pickup = ecs.write_storage::<WantsToPickupItem>();
+            pickup.insert(*player_entity, WantsToPickupItem{ collected_by: *player_entity, item }).expect("Unable to insert want to pickup");
         }
     }
 }
 
 pub fn player_input(gamestate: &mut State, context: &mut Rltk) -> RunState {
-    //Player movement
+    // Player movement
     match context.key {
-        None => { return RunState::Paused } //Nothing happens
+        None => { return RunState::AwaitingInput } // Nothing happened
         Some(key) => match key {
+            VirtualKeyCode::Left |
             VirtualKeyCode::Numpad4 |
-            VirtualKeyCode::H |
-            VirtualKeyCode::Left => try_move_player(-1, 0, &mut gamestate.ecs),
+            VirtualKeyCode::H => try_move_player(-1, 0, &mut gamestate.ecs),
 
+            VirtualKeyCode::Right |
             VirtualKeyCode::Numpad6 |
-            VirtualKeyCode::L |
-            VirtualKeyCode::Right => try_move_player(1, 0 , &mut gamestate.ecs),
+            VirtualKeyCode::L => try_move_player(1, 0, &mut gamestate.ecs),
 
+            VirtualKeyCode::Up |
             VirtualKeyCode::Numpad8 |
-            VirtualKeyCode::K |
-            VirtualKeyCode::Up => try_move_player(0, -1, &mut gamestate.ecs),
+            VirtualKeyCode::K => try_move_player(0, -1, &mut gamestate.ecs),
 
+            VirtualKeyCode::Down |
             VirtualKeyCode::Numpad2 |
-            VirtualKeyCode::J |
-            VirtualKeyCode::Down => try_move_player(0, 1, &mut gamestate.ecs),
+            VirtualKeyCode::J => try_move_player(0, 1, &mut gamestate.ecs),
 
-            //Diagonals
+            // Diagonals
             VirtualKeyCode::Numpad9 |
-            VirtualKeyCode::Y => try_move_player(-1, 1, &mut gamestate.ecs),
+            VirtualKeyCode::U => try_move_player(1, -1, &mut gamestate.ecs),
 
             VirtualKeyCode::Numpad7 |
-            VirtualKeyCode::U => try_move_player(-1, -1, &mut gamestate.ecs),
+            VirtualKeyCode::Y => try_move_player(-1, -1, &mut gamestate.ecs),
 
             VirtualKeyCode::Numpad3 |
             VirtualKeyCode::N => try_move_player(1, 1, &mut gamestate.ecs),
 
             VirtualKeyCode::Numpad1 |
-            VirtualKeyCode::B => try_move_player(1, -1, &mut gamestate.ecs),
+            VirtualKeyCode::B => try_move_player(-1, 1, &mut gamestate.ecs),
 
-            //Wait aka Do Nothing
-            VirtualKeyCode::Key5 |
-            VirtualKeyCode::Numpad5 => try_move_player(0, 0, &mut gamestate.ecs),
-            _ => {return RunState::AwaitingInput } // All other unlisted keystrokes
+            // Picking up items
+            VirtualKeyCode::P => get_item(&mut gamestate.ecs),
+            VirtualKeyCode::I => return RunState::ShowInventory,
+            VirtualKeyCode::D => return RunState::ShowDropItem,
+
+            _ => { return RunState::AwaitingInput }
         },
     }
     RunState::PlayerTurn
